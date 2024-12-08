@@ -1,0 +1,38 @@
+eap {
+	default_eap_type = tls
+    tls-config = tls-common
+	timer_expire = 60
+	ignore_unknown_eap_types = no
+	cisco_accounting_username_bug = no
+	max_sessions = ${max_requests}
+	md5 {
+	}
+	tls-config tls-common {
+		private_key_file = /etc/freeradius/3.0/certs/server.key
+		certificate_file = /etc/freeradius/3.0/certs/server.pem
+		ca_file = /etc/freeradius/3.0/certs/ca.pem
+		ca_path = ${cadir}
+		cipher_list = "DEFAULT"
+		cipher_server_preference = no
+		tls_min_version = "1.2"
+		tls_max_version = "1.3"
+		ecdh_curve = ""
+		cache {
+			enable = no
+			lifetime = 24 # hours
+			store {
+				Tunnel-Private-Group-Id
+			}
+		}
+		verify {
+		}
+		ocsp {
+			enable = no
+			override_cert_url = yes
+			url = "http://127.0.0.1/ocsp/"
+		}
+	}
+	tls {
+		tls = tls-common
+	}
+}

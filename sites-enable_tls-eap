@@ -1,0 +1,158 @@
+server default {
+listen {
+	type = auth
+	ipaddr = *
+	port = 0
+	limit {
+	      max_connections = 16
+	      lifetime = 0
+	      idle_timeout = 30
+	}
+}
+listen {
+	ipaddr = *
+	port = 0
+	type = acct
+
+	limit {
+	}
+}
+listen {
+	type = auth
+	ipv6addr = ::	# any.  ::1 == localhost
+	port = 0
+	limit {
+	      max_connections = 16
+	      lifetime = 0
+	      idle_timeout = 30
+	}
+}
+
+listen {
+	ipv6addr = ::
+	port = 0
+	type = acct
+
+	limit {
+	}
+}
+authorize {
+	filter_username
+	preprocess
+	chap
+	mschap
+	digest
+	suffix
+	eap {
+		ok = return
+	}
+	files
+	-sql
+	-ldap
+	expiration
+	logintime
+	pap
+	Autz-Type New-TLS-Connection {
+		  ok
+	}
+}
+authenticate {
+	eap
+}
+preacct {
+	preprocess
+	acct_unique
+	suffix
+	files
+}
+accounting {
+	detail
+	unix
+	-sql
+	exec
+	attr_filter.accounting_response
+}
+session {
+}
+post-auth {
+	# default by freeradius config
+	if (&User-Name =~ /^@/) {
+        noop
+    }
+
+    #
+    # Notice: if you wanna some username always use in TLS-EAP (just like guest), you can add it here.
+	# For example, if you wanna username start with "guest" always use in TLS-EAP, you can uncomment the following code which is commented, and comment the "reject" line.
+    
+	elsif (&User-Name =~ /^guest/) {
+        # update control {
+        #    Auth-Type := eap
+        #}
+        reject
+    }
+	# handle Microsoft Windows computer authentication bug (or feature?)
+	# description: Windows computer authentication will send User-Name as `host/TLS-Client-Cert-Common-Name`, so if you only set %FREERADIUS_DIR%/mods-enabled/eap check_cert_cn="{Client-Name}", you will fucked by Microsoft. 
+	# solution: split the User-Name to get the real username, and check if the username is same as the TLS-Client-Cert-Common-Name, if yes, set Auth-Type to eap.
+	# and for security, we will reject the request if the User-Name is empty.
+	# and you can add more rules to handle more cases, plz 发挥你的主观能动性
+	# -- by this program author
+    elsif (User-Name =~ /^host\/(.*)$/) {
+        update request {
+            User-Name := "%{1}"
+        }
+		# ensure the User-Name after split host/ prefix is not empty
+        if (&User-Name && &User-Name == "") {
+            reject
+        }
+        elsif (&User-Name == &TLS-Client-Cert-Common-Name) {
+            update control {
+                Auth-Type := eap
+            }
+        }
+        else {
+            reject
+        }
+    }
+    elsif (&User-Name == &TLS-Client-Cert-Common-Name) {
+        update control {
+            Auth-Type := eap
+        }
+    }
+    else {
+        reject
+    }
+
+	# default by freeradius config
+	if (session-state:User-Name && reply:User-Name && request:User-Name && (reply:User-Name == request:User-Name)) {
+		update reply {
+			&User-Name !* ANY
+		}
+	}
+	update {
+		&reply: += &session-state:
+	}
+	-sql
+	exec
+	remove_reply_message_if_eap
+	Post-Auth-Type REJECT {
+		-sql
+		attr_filter.access_reject
+		eap
+		remove_reply_message_if_eap
+	}
+	Post-Auth-Type Challenge {
+	}
+	Post-Auth-Type Client-Lost {
+	}
+	if (EAP-Key-Name && &reply:EAP-Session-Id) {
+		update reply {
+			&EAP-Key-Name := &reply:EAP-Session-Id
+		}
+	}
+}
+pre-proxy {
+}
+post-proxy {
+	eap
+}
+}
