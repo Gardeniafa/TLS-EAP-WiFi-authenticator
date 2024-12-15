@@ -1,0 +1,21 @@
+server peap-eap {
+    listen {
+        ipaddr = 127.0.0.1
+        port = 18120
+        type = auth
+    }
+    authorize {
+        filter_username
+        files
+        mschap
+        eap {
+            ok = return
+        }
+    }
+
+    authenticate {
+        mschap
+        eap
+    }
+}
+

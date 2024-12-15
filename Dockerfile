@@ -2,16 +2,17 @@ FROM ubuntu:24.04
 
 # update sources and install dependencies: openssl3.0.13, freeradius3.2.5, vim, net-tools, iproute2 and clean at end
 RUN apt update && \
-    apt install -y freeradius vim net-tools iproute2 python3 && \
+    apt install -y freeradius vim net-tools iproute2 python3 iputils-ping && \
     apt clean && \
     rm -rf /etc/freeradius/3.0/sites-enabled
 
 # copy the freeradius configuration files to /etc/freeradius/3.0
+COPY radiusd.conf /etc/freeradius/3.0/radiusd.conf
 COPY clients.conf /etc/freeradius/3.0/clients.conf
 COPY sites-enable_tls-eap /etc/freeradius/3.0/sites-enabled/tls-eap
-COPY eap-config /etc/freeradius/3.0/mods-enabled/eap
+COPY sites-enable_peap-eap /etc/freeradius/3.0/sites-enabled/peap-eap
+COPY mods-enable_eap /etc/freeradius/3.0/mods-enabled/eap
 
-COPY start.sh /start.sh
 
 # copy clients sign py script to /usr/local/bin
 COPY sign-client.py /usr/local/bin/sign-client.py
@@ -30,12 +31,13 @@ ARG YOUR_SERVER_SUBJ='/C=US/ST=CA/L=San Francisco/O=My Company/OU=My Org/CN=My S
 
 
 
-RUN chmod +x /usr/local/bin/sign-client.py && chmod +x /start.sh && \
+RUN chmod +x /usr/local/bin/sign-client.py  && chown -R freerad:freerad /etc/freeradius/3.0 && \
     openssl req -new -newkey rsa:4096 -days 3650 -nodes -x509 -subj "$YOUR_CA_SUBJ" -keyout /etc/freeradius/3.0/certs/ca.key -out /etc/freeradius/3.0/certs/ca.pem && \
     openssl req -new -newkey rsa:2048 -days 365 -nodes -subj "$YOUR_SERVER_SUBJ" -keyout /etc/freeradius/3.0/certs/server.key -out /etc/freeradius/3.0/certs/server.csr && \
     openssl x509 -req -in /etc/freeradius/3.0/certs/server.csr -CA /etc/freeradius/3.0/certs/ca.pem -CAkey /etc/freeradius/3.0/certs/ca.key -CAcreateserial -out /etc/freeradius/3.0/certs/server.pem && \
     chmod +r /etc/freeradius/3.0/certs/server.* 
 
 
-# run /start.sh
-CMD ["/start.sh"]
+CMD ["freeradius", "-f"]
+# always run for debug
+# CMD ["tail", "-f", "/dev/null"]
